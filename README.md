@@ -7,36 +7,38 @@
 Для деплоя приложения необходимо:
 
 1. Сервер с установленными Docker и Docker Compose
-2. Доступ к управлению DNS для домена ckeproekt.ru
-3. Открытые порты 80 и 443 на сервере
+2. Открытый порт 3000 на сервере (или настроенный проксирующий сервер)
 
-### Настройка DNS
+### Решение проблемы с ограничением запросов Docker Hub
 
-Создайте A-запись для поддомена zkh.ckeproekt.ru, указывающую на IP-адрес вашего сервера.
+Если при сборке возникает ошибка вида `ERROR: 429 Too Many Requests - Server message: toomanyrequests`, необходимо выполнить авторизацию в Docker Hub:
+
+1. Создайте бесплатный аккаунт на сайте https://hub.docker.com/
+2. Авторизуйтесь в Docker Hub на сервере:
+
+```bash
+docker login
+# Введите свой логин и пароль от Docker Hub
+```
+
+3. После этого можно продолжить сборку контейнера.
 
 ### Инструкция по деплою
 
 1. Клонировать репозиторий на сервер:
 
 ```bash
-git clone <url-репозитория> /path/to/app
-cd /path/to/app
+git clone https://github.com/Bivekich/ckezkh.git
+cd ckezkh
 ```
 
-2. Настроить SSL-сертификаты с помощью Let's Encrypt:
+2. Запустить приложение:
 
 ```bash
-chmod +x init-letsencrypt.sh
-./init-letsencrypt.sh
+docker-compose up -d --build
 ```
 
-3. Запустить приложение:
-
-```bash
-docker-compose up -d
-```
-
-4. Приложение будет доступно по адресу https://zkh.ckeproekt.ru
+3. Приложение будет доступно по адресу http://IP_СЕРВЕРА:3000
 
 ### Обновление приложения
 
@@ -44,33 +46,51 @@ docker-compose up -d
 
 ```bash
 git pull
-docker-compose build nextjs
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 ### Мониторинг логов
 
 ```bash
 # Логи NextJS приложения
-docker-compose logs -f nextjs
-
-# Логи Nginx
-docker-compose logs -f nginx
+docker-compose logs -f
 ```
 
 ### Структура деплоя
 
 - **nextjs** - контейнер с Next.js приложением
-- **nginx** - веб-сервер для проксирования запросов и SSL
-- **certbot** - сервис для автоматического обновления SSL-сертификатов
 
-### Резервное копирование
+### Настройка проксирования (опционально)
 
-Для создания резервной копии SSL-сертификатов выполните:
+Если вы хотите настроить проксирование через Nginx для домена zkh.ckeproekt.ru:
+
+1. Установите Nginx на сервер
+2. Создайте конфигурационный файл /etc/nginx/sites-available/zkh.ckeproekt.ru:
+
+```nginx
+server {
+    listen 80;
+    server_name zkh.ckeproekt.ru;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+3. Создайте символическую ссылку:
 
 ```bash
-tar -czvf backup-ssl-$(date +%Y%m%d).tar.gz ./nginx/certbot/conf
+ln -s /etc/nginx/sites-available/zkh.ckeproekt.ru /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
 ```
+
+4. Настройте DNS для домена zkh.ckeproekt.ru, указав на IP-адрес вашего сервера.
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
@@ -108,4 +128,5 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
 # ckezkh
